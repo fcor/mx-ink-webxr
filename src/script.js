@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { TubePainter } from "three/addons/misc/TubePainter.js";
-import { XRButton } from "three/addons/webxr/XRButton.js";
+import { TubePainter } from "three/examples/jsm/misc/TubePainter.js";
+import { XRButton } from "three/examples/jsm/webxr/XRButton.js";
 
 let camera, scene, renderer;
 let controller1, controller2;
@@ -17,7 +17,7 @@ init();
 function init() {
   const canvas = document.querySelector("canvas.webgl");
   scene = new THREE.Scene();
-
+  scene.background = new THREE.Color(0x222222);
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 50);
   camera.position.set(0, 1.6, 3);
 
@@ -29,6 +29,9 @@ function init() {
   const light = new THREE.DirectionalLight(0xffffff, 1.5);
   light.position.set(0, 4, 0);
   scene.add(light);
+
+  const painter1 = new TubePainter();
+  scene.add(painter1.mesh);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio, 2);
@@ -51,9 +54,7 @@ window.addEventListener("resize", () => {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 });
 
-
 function animate() {
-
   // Render
   renderer.render(scene, camera);
-};
+}
