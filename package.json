@@ -12,6 +12,7 @@
     "vite-plugin-restart": "^0.4.1"
   },
   "dependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.1.0",
     "three": "^0.166.1"
   }
 }
