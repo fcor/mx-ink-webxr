@@ -1,11 +1,19 @@
 import * as THREE from "three";
 import { TubePainter } from "three/examples/jsm/misc/TubePainter.js";
 import { XRButton } from "three/examples/jsm/webxr/XRButton.js";
+import { XRControllerModelFactory } from "three/examples/jsm/webxr/XRControllerModelFactory.js";
+import testVertexShader from "./shaders/test/vertex.glsl";
+import testFragmentShader from "./shaders/test/fragment.glsl";
 
 let camera, scene, renderer;
 let controller1, controller2;
+let controllerGrip1, controllerGrip2;
+let material;
+let painter1;
+let gamepad1;
 
 const cursor = new THREE.Vector3();
+const clock = new THREE.Clock();
 
 const sizes = {
   width: window.innerWidth,
@@ -30,7 +38,28 @@ function init() {
   light.position.set(0, 4, 0);
   scene.add(light);
 
-  const painter1 = new TubePainter();
+  // const shaderMat = new THREE.ShaderMaterial({
+  //   vertexShader: testVertexShader,
+  //   fragmentShader: testFragmentShader,
+  //   side: THREE.DoubleSide,
+  //   uniforms: {
+  //     uTime: { value: 0 },
+  //   },
+  // });
+
+  const material = new THREE.MeshNormalMaterial({
+    flatShading: true,
+    side: THREE.DoubleSide,
+  });
+
+  const geometry = new THREE.CylinderGeometry(0.15, 0.15);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(0, 1.5, 0);
+  // scene.add(mesh);
+
+  painter1 = new TubePainter();
+  painter1.mesh.material = material;
+
   scene.add(painter1.mesh);
 
   const painter2 = new TubePainter();
@@ -41,18 +70,36 @@ function init() {
   renderer.setSize(sizes.width, sizes.height);
   renderer.setAnimationLoop(animate);
   renderer.xr.enabled = true;
-  document.body.appendChild(XRButton.createButton(renderer));
+  document.body.appendChild(
+    XRButton.createButton(renderer, {
+      optionalFeatures: ["depth-sensing"],
+      depthSensing: { usagePreference: ["gpu-optimized"], dataFormatPreference: [] },
+    })
+  );
+
+  const controllerModelFactory = new XRControllerModelFactory();
 
   controller1 = renderer.xr.getController(0);
+  controller1.addEventListener("connected", onControllerConnected);
   controller1.addEventListener("selectstart", onSelectStart);
   controller1.addEventListener("selectend", onSelectEnd);
+  controller1.addEventListener("squeezestart", onSqueezeStart);
+  controller1.addEventListener("squeezeend", onSqueezeEnd);
   controller1.userData.painter = painter1;
+  // controllerGrip1 = renderer.xr.getControllerGrip(0);
+  // controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+  // scene.add(controllerGrip1);
   scene.add(controller1);
 
   controller2 = renderer.xr.getController(1);
   controller2.addEventListener("selectstart", onSelectStart);
   controller2.addEventListener("selectend", onSelectEnd);
+  controller2.addEventListener("squeezestart", onSqueezeStart);
+  controller2.addEventListener("squeezeend", onSqueezeEnd);
   controller2.userData.painter = painter2;
+  // controllerGrip2 = renderer.xr.getControllerGrip(1);
+  // controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+  // scene.add(controllerGrip2);
   scene.add(controller2);
 
   const pivot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.01, 3));
@@ -81,8 +128,19 @@ window.addEventListener("resize", () => {
 });
 
 function animate() {
+  // const elapsedTime = clock.getElapsedTime();
+  // material.uniforms.uTime.value = elapsedTime;
+  // generateCylindricalUVs(painter1.mesh.geometry);
+
   handleController(controller1);
   handleController(controller2);
+
+  gamepad1?.buttons.forEach((btn, index) => {
+    if (btn.pressed || btn.touched) {
+      console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`)
+    }
+  })
+
   // Render
   renderer.render(scene, camera);
 }
@@ -95,14 +153,6 @@ function handleController(controller) {
 
   const pivot = controller.getObjectByName("pivot");
 
-  if (userData.isSqueezing === true) {
-    const delta = (controller.position.y - userData.positionAtSqueezeStart) * 5;
-    const scale = Math.max(0.1, userData.scaleAtSqueezeStart + delta);
-
-    pivot.scale.setScalar(scale);
-    painter.setSize(scale);
-  }
-
   cursor.setFromMatrixPosition(pivot.matrixWorld);
 
   if (userData.isSelecting === true) {
@@ -110,8 +160,17 @@ function handleController(controller) {
     painter.update();
   }
 }
+function onSqueezeStart(e) {
+  console.log(e);
+}
+function onSqueezeEnd(e) {}
 
-function onSelectStart() {
+function onControllerConnected(e) {
+  gamepad1 = e.data.gamepad;
+}
+
+function onSelectStart(e) {
+  console.log(e);
   this.updateMatrixWorld(true);
 
   const pivot = this.getObjectByName("pivot");
@@ -125,4 +184,23 @@ function onSelectStart() {
 
 function onSelectEnd() {
   this.userData.isSelecting = false;
+}
+
+function generateCylindricalUVs(geometry) {
+  const positions = geometry.attributes.position.array;
+  const uvs = [];
+
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+
+    // Calculate cylindrical UVs
+    const u = Math.atan2(z, x) / (2 * Math.PI) + 0.5;
+    const v = y; // Normalize if needed based on your geometry height
+
+    uvs.push(u, v);
+  }
+
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
 }

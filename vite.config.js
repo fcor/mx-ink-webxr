@@ -1,5 +1,6 @@
 import restart from "vite-plugin-restart";
 import basicSsl from "@vitejs/plugin-basic-ssl";
+import glsl from "vite-plugin-glsl";
 
 export default {
   root: "src/", // Sources files (typically where index.html is)
@@ -17,5 +18,6 @@ export default {
   plugins: [
     restart({ restart: ["../static/**"] }), // Restart server on static file change
     basicSsl(),
+    glsl(),
   ],
 };
