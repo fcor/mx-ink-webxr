@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { TubePainter } from "three/examples/jsm/misc/TubePainter.js";
 import { XRButton } from "three/examples/jsm/webxr/XRButton.js";
 import { XRControllerModelFactory } from "three/examples/jsm/webxr/XRControllerModelFactory.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import testVertexShader from "./shaders/test/vertex.glsl";
 import testFragmentShader from "./shaders/test/fragment.glsl";
 
@@ -11,6 +13,9 @@ let controllerGrip1, controllerGrip2;
 let material;
 let painter1;
 let gamepad1;
+
+let isDrawing = false;
+let prevIsDrawing = false;
 
 const cursor = new THREE.Vector3();
 const clock = new THREE.Clock();
@@ -29,6 +34,11 @@ function init() {
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 50);
   camera.position.set(0, 1.6, 3);
 
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath("/draco/");
+
+  const gltfLoader = new GLTFLoader();
+  gltfLoader.setDRACOLoader(dracoLoader);
   const grid = new THREE.GridHelper(4, 1, 0x111111, 0x111111);
   scene.add(grid);
 
@@ -52,13 +62,14 @@ function init() {
     side: THREE.DoubleSide,
   });
 
-  const geometry = new THREE.CylinderGeometry(0.15, 0.15);
+  const geometry = new THREE.CylinderGeometry(0.005, 0.005, 0.05);
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(0, 1.5, 0);
+  // mesh.position.set(0, 1.5, 0);
   // scene.add(mesh);
 
   painter1 = new TubePainter();
   painter1.mesh.material = material;
+  painter1.setSize(0.1);
 
   scene.add(painter1.mesh);
 
@@ -71,13 +82,23 @@ function init() {
   renderer.setAnimationLoop(animate);
   renderer.xr.enabled = true;
   document.body.appendChild(
-    XRButton.createButton(renderer, {
-      optionalFeatures: ["depth-sensing"],
-      depthSensing: { usagePreference: ["gpu-optimized"], dataFormatPreference: [] },
-    })
+    XRButton.createButton(
+      renderer
+      //   {
+      //   optionalFeatures: ["depth-sensing"],
+      //   depthSensing: { usagePreference: ["gpu-optimized"], dataFormatPreference: [] },
+      // }
+    )
   );
 
   const controllerModelFactory = new XRControllerModelFactory();
+
+  const pivot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.001, 3));
+  pivot.name = "pivot";
+  // pivot.position.z = 0.05;
+
+  const group = new THREE.Group();
+  group.add(pivot);
 
   controller1 = renderer.xr.getController(0);
   controller1.addEventListener("connected", onControllerConnected);
@@ -87,9 +108,17 @@ function init() {
   controller1.addEventListener("squeezeend", onSqueezeEnd);
   controller1.userData.painter = painter1;
   // controllerGrip1 = renderer.xr.getControllerGrip(0);
-  // controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+  // controllerGrip1.add(stylus);
   // scene.add(controllerGrip1);
   scene.add(controller1);
+
+  gltfLoader.load("/models/stylus3.glb", (gltf) => {
+    // gltfLoader.load("https://cdn.jsdelivr.net/npm/@webxr-input-profiles/assets@1.0/dist/profiles/generic-trigger/right.glb",
+    // (gltf) => {
+    controllerGrip1 = renderer.xr.getControllerGrip(0);
+    controllerGrip1.add(gltf.scene);
+    scene.add(controllerGrip1);
+  });
 
   controller2 = renderer.xr.getController(1);
   controller2.addEventListener("selectstart", onSelectStart);
@@ -97,20 +126,13 @@ function init() {
   controller2.addEventListener("squeezestart", onSqueezeStart);
   controller2.addEventListener("squeezeend", onSqueezeEnd);
   controller2.userData.painter = painter2;
-  // controllerGrip2 = renderer.xr.getControllerGrip(1);
-  // controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-  // scene.add(controllerGrip2);
+  controllerGrip2 = renderer.xr.getControllerGrip(1);
+  controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+  scene.add(controllerGrip2);
   scene.add(controller2);
 
-  const pivot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.01, 3));
-  pivot.name = "pivot";
-  pivot.position.z = -0.03;
-
-  const group = new THREE.Group();
-  group.add(pivot);
-
-  controller1.add(group.clone());
-  controller2.add(group.clone());
+  // controller1.add(group.clone());
+  // controller2.add(group.clone());
 }
 
 window.addEventListener("resize", () => {
@@ -132,14 +154,24 @@ function animate() {
   // material.uniforms.uTime.value = elapsedTime;
   // generateCylindricalUVs(painter1.mesh.geometry);
 
-  handleController(controller1);
-  handleController(controller2);
+  // gamepad1?.buttons.forEach((btn, index) => {
+  //   if (btn.pressed) {
+  //     console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`);
+  //   }
+  // });
 
-  gamepad1?.buttons.forEach((btn, index) => {
-    if (btn.pressed || btn.touched) {
-      console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`)
+  if (gamepad1 && gamepad1.axes) {
+    prevIsDrawing = isDrawing;
+    isDrawing = gamepad1.axes[2] > 0;
+
+    if (isDrawing && !prevIsDrawing) {
+      const pivot = controllerGrip1.getObjectByName("mx_ink_tip");
+      cursor.setFromMatrixPosition(pivot.matrixWorld);
+      painter1.moveTo(cursor);
     }
-  })
+  }
+
+  handleController(controller1);
 
   // Render
   renderer.render(scene, camera);
@@ -151,13 +183,19 @@ function handleController(controller) {
   const userData = controller.userData;
   const painter = userData.painter;
 
-  const pivot = controller.getObjectByName("pivot");
+  if (gamepad1) {
+    const pivot = controllerGrip1.getObjectByName("mx_ink_tip");
+    cursor.setFromMatrixPosition(pivot.matrixWorld);
 
-  cursor.setFromMatrixPosition(pivot.matrixWorld);
+    if (userData.isSelecting === true) {
+      painter.lineTo(cursor);
+      painter.update();
+    }
 
-  if (userData.isSelecting === true) {
-    painter.lineTo(cursor);
-    painter.update();
+    if (isDrawing) {
+      painter.lineTo(cursor);
+      painter.update();
+    }
   }
 }
 function onSqueezeStart(e) {
