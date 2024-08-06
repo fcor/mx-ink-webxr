@@ -208,10 +208,9 @@ function onControllerConnected(e) {
 }
 
 function onSelectStart(e) {
-  console.log(e);
   this.updateMatrixWorld(true);
 
-  const pivot = this.getObjectByName("pivot");
+  const pivot = controllerGrip1.getObjectByName("mx_ink_tip");
   cursor.setFromMatrixPosition(pivot.matrixWorld);
 
   const painter = this.userData.painter;
