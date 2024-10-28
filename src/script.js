@@ -4,8 +4,6 @@ import { XRButton } from "three/examples/jsm/webxr/XRButton.js";
 import { XRControllerModelFactory } from "three/examples/jsm/webxr/XRControllerModelFactory.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-import testVertexShader from "./shaders/test/vertex.glsl";
-import testFragmentShader from "./shaders/test/fragment.glsl";
 
 let camera, scene, renderer;
 let controller1, controller2;
@@ -18,7 +16,6 @@ let isDrawing = false;
 let prevIsDrawing = false;
 
 const cursor = new THREE.Vector3();
-const clock = new THREE.Clock();
 
 const sizes = {
   width: window.innerWidth,
@@ -39,6 +36,7 @@ function init() {
 
   const gltfLoader = new GLTFLoader();
   gltfLoader.setDRACOLoader(dracoLoader);
+
   const grid = new THREE.GridHelper(4, 1, 0x111111, 0x111111);
   scene.add(grid);
 
@@ -47,15 +45,6 @@ function init() {
   const light = new THREE.DirectionalLight(0xffffff, 1.5);
   light.position.set(0, 4, 0);
   scene.add(light);
-
-  // const shaderMat = new THREE.ShaderMaterial({
-  //   vertexShader: testVertexShader,
-  //   fragmentShader: testFragmentShader,
-  //   side: THREE.DoubleSide,
-  //   uniforms: {
-  //     uTime: { value: 0 },
-  //   },
-  // });
 
   const material = new THREE.MeshNormalMaterial({
     flatShading: true,
@@ -73,23 +62,12 @@ function init() {
 
   scene.add(painter1.mesh);
 
-  const painter2 = new TubePainter();
-  scene.add(painter2.mesh);
-
   renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio, 2);
   renderer.setSize(sizes.width, sizes.height);
   renderer.setAnimationLoop(animate);
   renderer.xr.enabled = true;
-  document.body.appendChild(
-    XRButton.createButton(
-      renderer
-      //   {
-      //   optionalFeatures: ["depth-sensing"],
-      //   depthSensing: { usagePreference: ["gpu-optimized"], dataFormatPreference: [] },
-      // }
-    )
-  );
+  document.body.appendChild(XRButton.createButton(renderer));
 
   const controllerModelFactory = new XRControllerModelFactory();
 
@@ -107,32 +85,22 @@ function init() {
   controller1.addEventListener("squeezestart", onSqueezeStart);
   controller1.addEventListener("squeezeend", onSqueezeEnd);
   controller1.userData.painter = painter1;
-  // controllerGrip1 = renderer.xr.getControllerGrip(0);
-  // controllerGrip1.add(stylus);
-  // scene.add(controllerGrip1);
+  controllerGrip1 = renderer.xr.getControllerGrip(0);
+  controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+  scene.add(controllerGrip1);
   scene.add(controller1);
-
-  gltfLoader.load("/models/stylus3.glb", (gltf) => {
-    // gltfLoader.load("https://cdn.jsdelivr.net/npm/@webxr-input-profiles/assets@1.0/dist/profiles/generic-trigger/right.glb",
-    // (gltf) => {
-    controllerGrip1 = renderer.xr.getControllerGrip(0);
-    controllerGrip1.add(gltf.scene);
-    scene.add(controllerGrip1);
-  });
 
   controller2 = renderer.xr.getController(1);
   controller2.addEventListener("selectstart", onSelectStart);
   controller2.addEventListener("selectend", onSelectEnd);
   controller2.addEventListener("squeezestart", onSqueezeStart);
   controller2.addEventListener("squeezeend", onSqueezeEnd);
-  controller2.userData.painter = painter2;
   controllerGrip2 = renderer.xr.getControllerGrip(1);
   controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
   scene.add(controllerGrip2);
   scene.add(controller2);
 
   // controller1.add(group.clone());
-  // controller2.add(group.clone());
 }
 
 window.addEventListener("resize", () => {
@@ -171,7 +139,7 @@ function animate() {
     }
   }
 
-  handleController(controller1);
+  // handleController(controller1);
 
   // Render
   renderer.render(scene, camera);
