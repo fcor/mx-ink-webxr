@@ -8,12 +8,16 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 let camera, scene, renderer;
 let controller1, controller2;
 let controllerGrip1, controllerGrip2;
-let material;
+let stylus;
 let painter1;
 let gamepad1;
-
 let isDrawing = false;
 let prevIsDrawing = false;
+
+const material = new THREE.MeshNormalMaterial({
+  flatShading: true,
+  side: THREE.DoubleSide,
+});
 
 const cursor = new THREE.Vector3();
 
@@ -46,11 +50,6 @@ function init() {
   light.position.set(0, 4, 0);
   scene.add(light);
 
-  const material = new THREE.MeshNormalMaterial({
-    flatShading: true,
-    side: THREE.DoubleSide,
-  });
-
   const geometry = new THREE.CylinderGeometry(0.005, 0.005, 0.05);
   const mesh = new THREE.Mesh(geometry, material);
   // mesh.position.set(0, 1.5, 0);
@@ -71,26 +70,19 @@ function init() {
 
   const controllerModelFactory = new XRControllerModelFactory();
 
-  const pivot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.001, 3));
-  pivot.name = "pivot";
-  // pivot.position.z = 0.05;
-
-  const group = new THREE.Group();
-  group.add(pivot);
-
   controller1 = renderer.xr.getController(0);
   controller1.addEventListener("connected", onControllerConnected);
   controller1.addEventListener("selectstart", onSelectStart);
   controller1.addEventListener("selectend", onSelectEnd);
   controller1.addEventListener("squeezestart", onSqueezeStart);
   controller1.addEventListener("squeezeend", onSqueezeEnd);
-  controller1.userData.painter = painter1;
   controllerGrip1 = renderer.xr.getControllerGrip(0);
   controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
   scene.add(controllerGrip1);
   scene.add(controller1);
 
   controller2 = renderer.xr.getController(1);
+  controller2.addEventListener("connected", onControllerConnected);
   controller2.addEventListener("selectstart", onSelectStart);
   controller2.addEventListener("selectend", onSelectEnd);
   controller2.addEventListener("squeezestart", onSqueezeStart);
@@ -99,8 +91,6 @@ function init() {
   controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
   scene.add(controllerGrip2);
   scene.add(controller2);
-
-  // controller1.add(group.clone());
 }
 
 window.addEventListener("resize", () => {
@@ -118,10 +108,6 @@ window.addEventListener("resize", () => {
 });
 
 function animate() {
-  // const elapsedTime = clock.getElapsedTime();
-  // material.uniforms.uTime.value = elapsedTime;
-  // generateCylindricalUVs(painter1.mesh.geometry);
-
   // gamepad1?.buttons.forEach((btn, index) => {
   //   if (btn.pressed) {
   //     console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`);
@@ -139,21 +125,20 @@ function animate() {
     }
   }
 
-  // handleController(controller1);
+  handleController(stylus);
 
   // Render
   renderer.render(scene, camera);
 }
 
 function handleController(controller) {
-  controller.updateMatrixWorld(true);
+  if(!controller) return;
 
   const userData = controller.userData;
   const painter = userData.painter;
 
   if (gamepad1) {
-    const pivot = controllerGrip1.getObjectByName("mx_ink_tip");
-    cursor.setFromMatrixPosition(pivot.matrixWorld);
+    cursor.set(stylus.position.x, stylus.position.y, stylus.position.z);
 
     if (userData.isSelecting === true) {
       painter.lineTo(cursor);
@@ -172,40 +157,21 @@ function onSqueezeStart(e) {
 function onSqueezeEnd(e) {}
 
 function onControllerConnected(e) {
-  gamepad1 = e.data.gamepad;
+  if (e.data.profiles.includes("logitech-mx-ink")) {
+    stylus = e.target;
+    stylus.userData.painter = painter1;
+    gamepad1 = e.data.gamepad;
+    console.log("Stylus connected");
+  }
 }
 
 function onSelectStart(e) {
-  this.updateMatrixWorld(true);
-
-  const pivot = controllerGrip1.getObjectByName("mx_ink_tip");
-  cursor.setFromMatrixPosition(pivot.matrixWorld);
-
-  const painter = this.userData.painter;
-  painter.moveTo(cursor);
-
+  if (e.target !== stylus) return;
+  const painter = stylus.userData.painter;
+  painter.moveTo(stylus.position);
   this.userData.isSelecting = true;
 }
 
 function onSelectEnd() {
   this.userData.isSelecting = false;
-}
-
-function generateCylindricalUVs(geometry) {
-  const positions = geometry.attributes.position.array;
-  const uvs = [];
-
-  for (let i = 0; i < positions.length; i += 3) {
-    const x = positions[i];
-    const y = positions[i + 1];
-    const z = positions[i + 2];
-
-    // Calculate cylindrical UVs
-    const u = Math.atan2(z, x) / (2 * Math.PI) + 0.5;
-    const v = y; // Normalize if needed based on your geometry height
-
-    uvs.push(u, v);
-  }
-
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
 }
