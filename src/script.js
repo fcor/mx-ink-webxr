@@ -50,11 +50,6 @@ function init() {
   light.position.set(0, 4, 0);
   scene.add(light);
 
-  const geometry = new THREE.CylinderGeometry(0.005, 0.005, 0.05);
-  const mesh = new THREE.Mesh(geometry, material);
-  // mesh.position.set(0, 1.5, 0);
-  // scene.add(mesh);
-
   painter1 = new TubePainter();
   painter1.mesh.material = material;
   painter1.setSize(0.1);
@@ -66,7 +61,7 @@ function init() {
   renderer.setSize(sizes.width, sizes.height);
   renderer.setAnimationLoop(animate);
   renderer.xr.enabled = true;
-  document.body.appendChild(XRButton.createButton(renderer));
+  document.body.appendChild(XRButton.createButton(renderer, { optionalFeatures: ["unbounded"] }));
 
   const controllerModelFactory = new XRControllerModelFactory();
 
@@ -74,8 +69,6 @@ function init() {
   controller1.addEventListener("connected", onControllerConnected);
   controller1.addEventListener("selectstart", onSelectStart);
   controller1.addEventListener("selectend", onSelectEnd);
-  controller1.addEventListener("squeezestart", onSqueezeStart);
-  controller1.addEventListener("squeezeend", onSqueezeEnd);
   controllerGrip1 = renderer.xr.getControllerGrip(0);
   controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
   scene.add(controllerGrip1);
@@ -85,8 +78,6 @@ function init() {
   controller2.addEventListener("connected", onControllerConnected);
   controller2.addEventListener("selectstart", onSelectStart);
   controller2.addEventListener("selectend", onSelectEnd);
-  controller2.addEventListener("squeezestart", onSqueezeStart);
-  controller2.addEventListener("squeezeend", onSqueezeEnd);
   controllerGrip2 = renderer.xr.getControllerGrip(1);
   controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
   scene.add(controllerGrip2);
@@ -108,31 +99,25 @@ window.addEventListener("resize", () => {
 });
 
 function animate() {
-  // gamepad1?.buttons.forEach((btn, index) => {
-  //   if (btn.pressed) {
-  //     console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`);
-  //   }
-  // });
-
-  if (gamepad1 && gamepad1.axes) {
+  if (gamepad1) {
     prevIsDrawing = isDrawing;
-    isDrawing = gamepad1.axes[2] > 0;
+    isDrawing = gamepad1.buttons[5].value > 0;
+    // debugGamepad(gamepad1);
 
     if (isDrawing && !prevIsDrawing) {
-      const pivot = controllerGrip1.getObjectByName("mx_ink_tip");
-      cursor.setFromMatrixPosition(pivot.matrixWorld);
-      painter1.moveTo(cursor);
+      const painter = stylus.userData.painter;
+      painter.moveTo(stylus.position);
     }
   }
 
-  handleController(stylus);
+  handleDrawing(stylus);
 
   // Render
   renderer.render(scene, camera);
 }
 
-function handleController(controller) {
-  if(!controller) return;
+function handleDrawing(controller) {
+  if (!controller) return;
 
   const userData = controller.userData;
   const painter = userData.painter;
@@ -140,28 +125,18 @@ function handleController(controller) {
   if (gamepad1) {
     cursor.set(stylus.position.x, stylus.position.y, stylus.position.z);
 
-    if (userData.isSelecting === true) {
-      painter.lineTo(cursor);
-      painter.update();
-    }
-
-    if (isDrawing) {
+    if (userData.isSelecting || isDrawing) {
       painter.lineTo(cursor);
       painter.update();
     }
   }
 }
-function onSqueezeStart(e) {
-  console.log(e);
-}
-function onSqueezeEnd(e) {}
 
 function onControllerConnected(e) {
   if (e.data.profiles.includes("logitech-mx-ink")) {
     stylus = e.target;
     stylus.userData.painter = painter1;
     gamepad1 = e.data.gamepad;
-    console.log("Stylus connected");
   }
 }
 
@@ -174,4 +149,16 @@ function onSelectStart(e) {
 
 function onSelectEnd() {
   this.userData.isSelecting = false;
+}
+
+function debugGamepad(gamepad) {
+  gamepad.buttons.forEach((btn, index) => {
+    if (btn.pressed) {
+      console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`);
+    }
+
+    if (btn.touched) {
+      console.log(`BTN ${index} - Pressed: ${btn.pressed} - Touched: ${btn.touched} - Value: ${btn.value}`);
+    }
+  });
 }
