@@ -2,6 +2,10 @@
 
 This template uses Three.js and WebXR to provide an immersive 3D painting experience using Logitech MX-INK.
 
+<p align="center">
+<img src="https://github.com/user-attachments/assets/a0bdc4d3-40b8-4f5e-99eb-8d664477294b" alt="MX Ink WebXR Demo" width="500"/>
+</p>
+
 ## Prerequisites
 
 - Node.js (version 12.0 or higher recommended)
