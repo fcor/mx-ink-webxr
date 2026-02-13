@@ -37,7 +37,7 @@ Use adb port reversing to be able to use the `localhost` url in the headset:
 ```sh
 adb reverse tcp:5173 tcp:5173
 ```
-Port reversing is great for testing. This way you don't not need to type the IP address of your server.
+Port reversing is great for testing. This way you don't need to type the IP address of your server.
 
 ## Debugging
 
