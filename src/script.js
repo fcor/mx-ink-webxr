@@ -16,6 +16,8 @@ let painter = null;
 let gamepad1;
 let rearButtonPressed = false;
 let rearButtonT0 = 0;
+let primaryButtonPressed = false;
+let paletteTouchActive = false;
 let isDrawingOutsideWhiteboard = false;
 let prevIsDrawing = false;
 
@@ -32,14 +34,19 @@ const DRAW_THRESHOLD = 0.002; // How close stylus needs to be to draw
 
 let constraint; // WhiteboardMarkerConstraint
 let stylus3dModel
+let paletteMesh;
+const paletteRaycaster = new THREE.Raycaster();
+
+function pulseHaptic(duration = 60) {
+  const actuator = gamepad1?.hapticActuators?.[0];
+  actuator?.pulse?.(1, duration);
+}
 
 window.clearWhiteboard = () => {
   whiteboardCtx.fillStyle = 'white';
   whiteboardCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   if (canvasTexture) canvasTexture.needsUpdate = true;
-  if (gamepad1) {
-    gamepad1.hapticActuators[0].pulse(1, 200);
-  }
+  pulseHaptic(60);
 }
 
 function drawOnCanvas(from, to) {
@@ -119,7 +126,7 @@ function setupUi() {
 
   // Create the HTMLMesh
   const paletteEl = document.getElementById('color-palette');
-  const paletteMesh = new HTMLMesh(paletteEl);
+  paletteMesh = new HTMLMesh(paletteEl);
 
   // Position the palette in 3D space (e.g., floating in front of user)
   paletteMesh.position.set(0, 0.75, -0.39);
@@ -143,9 +150,44 @@ window.selectColor = (colorHex) => {
   whiteboardInkColor = colorHex;
 
   if (gamepad1) {
-    gamepad1.hapticActuators[0].pulse(1, 60);
+    pulseHaptic();
   }
 };
+
+function dispatchPaletteClick(uv) {
+  paletteMesh.dispatchEvent({
+    type: 'click',
+    data: new THREE.Vector2(uv.x, 1 - uv.y)
+  });
+}
+
+function updatePaletteInteraction() {
+  if (!stylus || !gamepad1 || !paletteMesh) return false;
+
+  const primaryPressed = gamepad1.buttons[4]?.pressed || gamepad1.buttons[4]?.value > 0.5;
+  if (primaryPressed && !primaryButtonPressed) {
+    paletteRaycaster.setFromXRController(stylus);
+    const [intersection] = paletteRaycaster.intersectObject(paletteMesh, false);
+    if (intersection) dispatchPaletteClick(intersection.uv);
+  }
+  primaryButtonPressed = primaryPressed;
+
+  const localTipPosition = paletteMesh.worldToLocal(stylus.position.clone());
+  const { width, height } = paletteMesh.geometry.parameters;
+  const touchingPalette = Math.abs(localTipPosition.z) <= 0.02 &&
+    Math.abs(localTipPosition.x) <= width / 2 &&
+    Math.abs(localTipPosition.y) <= height / 2;
+
+  if (touchingPalette && !paletteTouchActive) {
+    dispatchPaletteClick(new THREE.Vector2(
+      localTipPosition.x / width + 0.5,
+      localTipPosition.y / height + 0.5
+    ));
+  }
+  paletteTouchActive = touchingPalette;
+
+  return touchingPalette;
+}
 
 function init() {
   const canvas = document.querySelector("canvas.webgl");
@@ -289,9 +331,11 @@ function initVariableTubePainter() {
 
 function animate() {
   if (gamepad1) {
+    const touchingPalette = updatePaletteInteraction();
     prevIsDrawing = isDrawingOutsideWhiteboard;
     // stylus inputs: primary and/or tip is active
-    isDrawingOutsideWhiteboard = gamepad1.buttons[5].value > 0 || gamepad1.buttons[4].value > 0;
+    isDrawingOutsideWhiteboard = !touchingPalette &&
+      (gamepad1.buttons[5].value > 0 || gamepad1.buttons[4].value > 0);
     // debugGamepad(gamepad1);
 
     const constrainedPose = constraint.getVisibleMarkerPose({
@@ -327,10 +371,7 @@ function animate() {
         stroke.mesh.removeFromParent();
         stroke = undefined;
 
-        // Access the haptic actuator
-        const actuator = gamepad1.hapticActuators[0];
-        // Trigger a pulse
-        actuator.pulse(1, 80);
+        pulseHaptic(80);
       }
     }
 
@@ -344,7 +385,7 @@ function animate() {
           stroke = undefined;
         });
         strokes = [];
-        gamepad1.hapticActuators[0].pulse(1, 200);
+        pulseHaptic(200);
       }
     }
   }
