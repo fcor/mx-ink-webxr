@@ -20,6 +20,8 @@ class VariableTubePainter {
 
         this.drawCount = 0; // Number of vertices currently used
         this.geometry.setDrawRange(0, 0);
+        this.points = [];
+        this.boundingBox = new THREE.Box3();
 
         // Helpers for math (to avoid creating objects in the loop)
         this.prevPos = new THREE.Vector3();
@@ -40,6 +42,8 @@ class VariableTubePainter {
     moveTo(position) {
         this.prevPos.copy(position);
         this.hasStart = true;
+        this.points = [position.clone()];
+        this.boundingBox.setFromPoints(this.points);
 
         // Reset internal state for a new stroke, but we don't clear the geometry 
         // (this implementation assumes one mesh per stroke for simplicity in this demo).
@@ -66,6 +70,8 @@ class VariableTubePainter {
         }
 
         this.currPos.copy(position);
+        this.points.push(this.currPos.clone());
+        this.boundingBox.expandByPoint(this.currPos);
 
         // 2. Calculate Orientation Frame
         // Forward direction
