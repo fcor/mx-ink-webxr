@@ -11,7 +11,10 @@
 <body>
     <canvas class="webgl"></canvas>
     <div id="color-palette">
-        <button id="clearAll" class="square-btn" style="background: #FFFFFF" onclick="clearWhiteboard()">🗑️</button>
+        <button id="clearAll" class="square-btn" style="background: #FFFFFF" onclick="clearWhiteboard()"
+            aria-label="Clear whiteboard" title="Clear whiteboard">🗑️</button>
+        <button id="saveDrawing" class="square-btn" style="background: #FFFFFF" onclick="saveDrawing()"
+            aria-label="No new drawing to save" title="No new drawing to save" disabled>💾</button>
 
         <button id="colorButton_FFFFFF" class="color-btn" style="background: #FFFFFF"
             onclick="selectColor('#FFFFFF')"></button>

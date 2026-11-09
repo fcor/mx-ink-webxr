@@ -28,6 +28,12 @@ let whiteboardInkColor = '#000000';
 let drawWidth = 12;
 let eraserWidth = 36;
 let lastPoint = null;
+let whiteboardStrokes = [];
+let activeWhiteboardStroke = null;
+let hasUnsavedChanges = false;
+let isSaveFeedbackActive = false;
+let saveFeedbackTimeout;
+const SAVE_FEEDBACK_DURATION = 350;
 const CANVAS_WIDTH = 2048;
 const CANVAS_HEIGHT = 1024;
 const DRAW_THRESHOLD = 0.002; // How close stylus needs to be to draw
@@ -53,25 +59,124 @@ function pulseHaptic(duration = 60) {
   actuator?.pulse?.(1, duration);
 }
 
+function hasDrawingInScene() {
+  return whiteboardStrokes.length > 0 || strokes.some((stroke) => stroke.points.length > 1);
+}
+
+function updateSaveButton() {
+  const saveButton = document.getElementById('saveDrawing');
+  if (!saveButton) return;
+
+  const hasDrawing = hasDrawingInScene();
+  const canSave = hasUnsavedChanges && hasDrawing;
+  saveButton.disabled = !canSave && !isSaveFeedbackActive;
+  const label = isSaveFeedbackActive
+    ? 'Saving drawing'
+    : canSave ? 'Save drawing as JSON'
+      : hasUnsavedChanges && !hasDrawing ? 'No drawing to save' : 'No new drawing to save';
+  saveButton.title = label;
+  saveButton.setAttribute('aria-label', label);
+}
+
+function markDrawingChanged() {
+  const saveButton = document.getElementById('saveDrawing');
+  const needsRefresh = !hasUnsavedChanges || saveButton?.disabled;
+  hasUnsavedChanges = true;
+  if (needsRefresh) updateSaveButton();
+}
+
 window.clearWhiteboard = () => {
+  const hadWhiteboardStrokes = whiteboardStrokes.length > 0;
   whiteboardCtx.fillStyle = 'white';
   whiteboardCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  whiteboardStrokes = [];
+  activeWhiteboardStroke = null;
   if (canvasTexture) canvasTexture.needsUpdate = true;
+  if (hadWhiteboardStrokes) markDrawingChanged();
   pulseHaptic(60);
 }
 
 function drawOnCanvas(from, to) {
+  const lineWidth = whiteboardInkColor === "#FFFFFF" ? eraserWidth : drawWidth;
+  const previousPoint = activeWhiteboardStroke?.points.at(-1);
+  if (!activeWhiteboardStroke || activeWhiteboardStroke.color !== whiteboardInkColor ||
+    activeWhiteboardStroke.width !== lineWidth || previousPoint.x !== from.x || previousPoint.y !== from.y) {
+    activeWhiteboardStroke = {
+      color: whiteboardInkColor,
+      width: lineWidth,
+      points: [[from.x, from.y]]
+    };
+    whiteboardStrokes.push(activeWhiteboardStroke);
+  }
+  activeWhiteboardStroke.points.push([to.x, to.y]);
+  markDrawingChanged();
+
   whiteboardCtx.beginPath();
   whiteboardCtx.moveTo(from.x, from.y);
   whiteboardCtx.lineTo(to.x, to.y);
   whiteboardCtx.strokeStyle = whiteboardInkColor;
-  whiteboardCtx.lineWidth = whiteboardInkColor === "#FFFFFF" ? eraserWidth : drawWidth;
+  whiteboardCtx.lineWidth = lineWidth;
   whiteboardCtx.lineCap = 'round';
   whiteboardCtx.lineJoin = 'round';
   whiteboardCtx.stroke();
   // Tell three.js to update the texture
   if (canvasTexture) canvasTexture.needsUpdate = true;
 }
+
+window.saveDrawing = () => {
+  if (!hasUnsavedChanges || !hasDrawingInScene() || isSaveFeedbackActive) return;
+
+  isSaveFeedbackActive = true;
+  const saveButton = document.getElementById('saveDrawing');
+  saveButton?.classList.add('selected');
+  updateSaveButton();
+  pulseHaptic();
+
+  try {
+    const drawing = {
+      format: 'mx-ink-drawing',
+      version: 1,
+      whiteboard: {
+        canvasWidth: CANVAS_WIDTH,
+        canvasHeight: CANVAS_HEIGHT,
+        width: whiteboard.geometry.parameters.width,
+        height: whiteboard.geometry.parameters.height,
+        position: whiteboard.position.toArray(),
+        rotation: whiteboard.quaternion.toArray()
+      },
+      whiteboardStrokes,
+      strokes: strokes.filter((stroke) => stroke.points.length > 1).map((stroke) => {
+        stroke.mesh.updateWorldMatrix(true, false);
+        return {
+          color: `#${stroke.originalColor.getHexString()}`,
+          points: stroke.points.map((point) => stroke.mesh.localToWorld(point.clone()).toArray()),
+          widths: stroke.widths
+        };
+      })
+    };
+    const blob = new Blob([JSON.stringify(drawing, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mx-ink-drawing-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    hasUnsavedChanges = false;
+  } catch (error) {
+    console.error('Unable to save drawing:', error);
+  } finally {
+    window.clearTimeout(saveFeedbackTimeout);
+    saveFeedbackTimeout = window.setTimeout(() => {
+      isSaveFeedbackActive = false;
+      saveButton?.classList.remove('selected');
+      updateSaveButton();
+    }, SAVE_FEEDBACK_DURATION);
+  }
+};
+
+updateSaveButton();
 // This function converts a 3D world position to 2D canvas coordinates
 function getDrawingCoordinates(worldPosition) {
   // Check distance to whiteboard plane
@@ -327,6 +432,7 @@ function finishStrokeGrab() {
   }
 
   if (movedEntries.length) undoActions.push({ type: 'move', entries: movedEntries });
+  if (movedEntries.length) markDrawingChanged();
   for (const stroke of strokes) stroke.hoverStartedAt = null;
   activeStrokeGrab = null;
 }
@@ -360,6 +466,7 @@ function undoLastAction() {
       isDrawingOutsideWhiteboard = false;
     }
   }
+  markDrawingChanged();
   pulseHaptic(80);
 }
 
@@ -529,6 +636,8 @@ function animate() {
     if (lastPoint && currentPoint) {
       drawOnCanvas(lastPoint, currentPoint);
       isDrawingOutsideWhiteboard = false; // do not draw in 3D
+    } else if (!currentPoint) {
+      activeWhiteboardStroke = null;
     }
 
     // Update lastPoint for the next move.
@@ -569,6 +678,7 @@ function animate() {
         activeStrokeGrab = null;
         painter = null;
         isDrawingOutsideWhiteboard = false;
+        markDrawingChanged();
         pulseHaptic(200);
       }
     }
@@ -587,7 +697,9 @@ function handleDrawing(controller) {
       if (painter) {
         // Update the stroke
         const width = Math.max(gamepad1.buttons[5].value, gamepad1.buttons[4].value);
+        const pointCount = painter.points.length;
         painter.lineTo(stylus.position, width * 0.01);
+        if (painter.points.length > pointCount) markDrawingChanged();
       }
     }
   }

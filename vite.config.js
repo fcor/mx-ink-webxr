@@ -1,10 +1,14 @@
 import restart from "vite-plugin-restart";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import glsl from "vite-plugin-glsl";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default {
   base: "/mx-ink-webxr/", // This tells Vite the site is hosted at https://mario-gutierrez.github.io/mx-ink-webxr/
-  root: "src/", // Sources files (typically where index.html is)
+  root: resolve(projectRoot, "src"), // Sources files (typically where index.html is)
   publicDir: "../static/", // Path from "root" to static assets (files that are served as they are)
   server: {
     host: true, // Open to local network and display URL
@@ -15,6 +19,12 @@ export default {
     outDir: "../dist", // Output in the dist/ folder
     emptyOutDir: true, // Empty the folder first
     sourcemap: true, // Add sourcemap
+    rollupOptions: {
+      input: {
+        main: resolve(projectRoot, "src/index.html"),
+        viewer: resolve(projectRoot, "src/viewer.html")
+      }
+    }
   },
   plugins: [
     restart({ restart: ["../static/**"] }), // Restart server on static file change

@@ -2,13 +2,13 @@ import * as THREE from 'three';
 
 // --- CUSTOM TUBE PAINTER CLASS (Variable Width Support) ---
 class VariableTubePainter {
-    constructor() {
+    constructor(maxPoints = 100000) {
         this.type = 'VariableTubePainter';
 
         // Configuration
         this.minDistance = 0.003; // 1mm threshold
         this.radialSegments = 8;
-        this.maxPoints = 100000;   // Increase buffer size for longer strokes
+        this.maxPoints = maxPoints;
 
         // State
         this.geometry = new THREE.BufferGeometry();
@@ -21,6 +21,7 @@ class VariableTubePainter {
         this.drawCount = 0; // Number of vertices currently used
         this.geometry.setDrawRange(0, 0);
         this.points = [];
+        this.widths = [];
         this.boundingBox = new THREE.Box3();
 
         // Helpers for math (to avoid creating objects in the loop)
@@ -43,6 +44,7 @@ class VariableTubePainter {
         this.prevPos.copy(position);
         this.hasStart = true;
         this.points = [position.clone()];
+        this.widths = [0];
         this.boundingBox.setFromPoints(this.points);
 
         // Reset internal state for a new stroke, but we don't clear the geometry 
@@ -71,6 +73,8 @@ class VariableTubePainter {
 
         this.currPos.copy(position);
         this.points.push(this.currPos.clone());
+        if (this.points.length === 2) this.widths[0] = width;
+        this.widths.push(width);
         this.boundingBox.expandByPoint(this.currPos);
 
         // 2. Calculate Orientation Frame

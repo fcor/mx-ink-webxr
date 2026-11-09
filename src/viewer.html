@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MX Ink Drawing Viewer</title>
+    <link rel="stylesheet" href="./viewer.css">
+</head>
+
+<body>
+    <canvas class="webgl" aria-label="3D drawing viewer"></canvas>
+    <header class="viewer-toolbar">
+        <a class="back-link" href="./">MX Ink</a>
+        <label class="open-button" for="drawingFile">Open drawing</label>
+        <input id="drawingFile" type="file" accept=".json,application/json">
+        <output id="viewerStatus" aria-live="polite">Choose a drawing JSON file</output>
+    </header>
+    <script type="module" src="./viewer.js"></script>
+</body>
+
+</html>
