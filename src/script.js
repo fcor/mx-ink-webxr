@@ -233,7 +233,7 @@ function setStrokeHighlighted(stroke, highlighted) {
   if (stroke.isHighlighted === highlighted) return;
 
   if (highlighted) {
-    stroke.mesh.material.color.copy(stroke.originalColor).lerp(strokeHighlightColor, 0.65);
+    stroke.mesh.material.color.copy(stroke.originalColor).lerp(strokeHighlightColor, 0.25);
   } else {
     stroke.mesh.material.color.copy(stroke.originalColor);
   }
