@@ -37,6 +37,7 @@ const STROKE_HIGHLIGHT_DELAY = 500;
 let constraint; // WhiteboardMarkerConstraint
 let stylus3dModel
 let paletteMesh;
+let paletteControlBounds = [];
 const paletteRaycaster = new THREE.Raycaster();
 const strokeHighlightColor = new THREE.Color(0xffffff);
 const strokeLocalPoint = new THREE.Vector3();
@@ -136,6 +137,16 @@ function setupUi() {
 
   // Create the HTMLMesh
   const paletteEl = document.getElementById('color-palette');
+  const paletteRect = paletteEl.getBoundingClientRect();
+  paletteControlBounds = Array.from(paletteEl.querySelectorAll('button'), (button) => {
+    const rect = button.getBoundingClientRect();
+    return {
+      left: (rect.left - paletteRect.left) / paletteRect.width,
+      right: (rect.right - paletteRect.left) / paletteRect.width,
+      top: (rect.top - paletteRect.top) / paletteRect.height,
+      bottom: (rect.bottom - paletteRect.top) / paletteRect.height
+    };
+  });
   paletteMesh = new HTMLMesh(paletteEl);
 
   // Position the palette in 3D space (e.g., floating in front of user)
@@ -174,10 +185,17 @@ function dispatchPaletteClick(uv) {
 function updatePaletteInteraction() {
   if (!stylus || !gamepad1 || !paletteMesh) return false;
 
+  paletteRaycaster.setFromXRController(stylus);
+  const [intersection] = paletteRaycaster.intersectObject(paletteMesh, false);
+  const paletteX = intersection?.uv.x;
+  const paletteY = intersection ? 1 - intersection.uv.y : null;
+  const pointingAtControl = intersection && paletteControlBounds.some((bounds) =>
+    paletteX >= bounds.left && paletteX <= bounds.right &&
+    paletteY >= bounds.top && paletteY <= bounds.bottom
+  );
+
   const primaryPressed = gamepad1.buttons[4]?.pressed || gamepad1.buttons[4]?.value > 0.5;
   if (primaryPressed && !primaryButtonPressed) {
-    paletteRaycaster.setFromXRController(stylus);
-    const [intersection] = paletteRaycaster.intersectObject(paletteMesh, false);
     if (intersection) dispatchPaletteClick(intersection.uv);
   }
   primaryButtonPressed = primaryPressed;
@@ -196,7 +214,7 @@ function updatePaletteInteraction() {
   }
   paletteTouchActive = touchingPalette;
 
-  return touchingPalette;
+  return touchingPalette || pointingAtControl;
 }
 
 function getStrokeDistanceSquared(stroke, worldPosition) {
